@@ -1,0 +1,88 @@
+;MACROS DEFINITION ==========================================================================
+%macro write_string 2
+    mov	ebx, 1	    ;file descriptor (stdout)
+	mov	eax, 4	    ;system call number (sys_write);tell linker entry 
+	mov	ecx, %1     ;message to write
+	mov	edx, %2     ;message length
+	int	0x80        ;call kernel
+%endmacro
+
+%macro accept 2
+    mov ebx,0
+    mov eax,3
+	mov ecx,%1
+	mov edx,%2
+	int	0x80        ;call kernel
+%endmacro
+;==============================================================================================;
+
+section	.text
+	global _start       			;must be declared for using gcc
+_start:                     			;tell linker entry point
+    	write_string msg1, len1
+    	write_string string_inp,string_len
+    	write_string newline, newl_len
+    	write_string msg2, len2
+    	accept st_ind,1
+    	write_string st_ind,1
+    	write_string newline, newl_len
+    	write_string msg3, len3
+    	accept en_ind,1
+    	write_string en_ind,1
+    	write_string newline, newl_len
+    	write_string msg4,len4
+	
+	mov esi, string_inp
+	mov byte[len_temp],string_len
+	add byte[len_temp], 30h
+rpt:	mov ch, [esi]
+        mov bl, byte[st_ind]
+ 	cmp bl, byte[counter]
+ 	jg nextchar
+ 	mov bl, byte[en_ind]
+ 	cmp byte[counter], bl
+ 	jg nextchar
+	
+	mov al, byte[esi]
+	mov byte[print_temp], al
+	write_string print_temp,1
+	    
+nextchar: inc esi
+          inc byte[counter]
+          dec byte[len_temp]
+          cmp byte[len_temp],'0'
+          jg rpt
+	
+	
+	    
+myend:				; end program
+	    mov	eax, 1	    	;system call number (sys_exit)
+	    mov ebx, 0
+	    int	0x80        	;call kernel
+;==========================================================================================;
+
+section	.data
+
+msg1	db	'Input string is : '	
+len1	equ	$ -msg1
+msg2    db  	'Enter start index: '
+len2    equ 	$ -msg2
+msg3    db  	'Enter end index: '
+len3    equ 	$ -msg3
+msg4    db  	'Substring is: '
+len4    equ 	$ -msg4
+newline db 	" ",0xa
+newl_len equ 	$ -newline
+counter db 	'0'
+string_inp db 	"GoodMorning"
+string_len 	equ $ -string_inp
+print_temp db 	'0'
+len_temp db 	'0'
+
+;=============================================================================================;
+
+section .bss
+
+st_ind: resb 1
+en_ind: resb 1
+;==============================================================================================;

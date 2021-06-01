@@ -1,0 +1,191 @@
+;MACROS DEFINITION
+;-----------------------------------------------------------------------------------;
+%macro display 2 ;display output
+mov eax,4        ;system call number (sys_write)
+mov ebx,1        ;file descriptor(stdout)
+mov ecx,%1       ;message to write
+mov edx,%2       ;length of message
+int 80h          ;call kernel-triggering OS interrupt
+%endmacro
+
+%macro accept 2     ;accept input
+mov eax,3           ;system call number (sys_read)
+mov ebx,0           ;source keyboard
+mov ecx,%1          ;pointer to memory location
+mov edx,%2          ;size of string
+int 80h             ;call kernel-triggering OS interrupt
+%endmacro
+
+;====================================================================================;
+
+section .bss            ;to store uninitialized data
+
+num :resb 1             ; stores total number of elements
+temp :resb 1            ; holds the input number
+print_temp: resb 1      ; holds a number temporarily for printing
+
+;====================================================================================;
+
+section .data
+
+msg1 db 'Enter the number of elements: '
+len1 equ $ - msg1
+msg2 db 'Enter the elements: '
+len2 equ $ - msg2
+pos_msg db 'Positive numbers: '
+pos_msg_len equ $ - pos_msg
+neg_msg db 'Negative numbers: '
+neg_msg_len equ $ - neg_msg
+
+; array to store all positive numbers
+positives db '0','0','0','0','0','0','0','0','0','0'
+; array to store all negative numbers
+negatives db '0','0','0','0','0','0','0','0','0','0'
+
+pos_cntr db 0h        ; variable to keep count of positive nos
+neg_cntr db 0h        ; variable to keep count of negative nos
+
+; temporary address variables to store the location where the next 
+; positive/negative no would be stored
+temp_addr_p dd '0'
+temp_addr_n dd '0'
+
+
+neg_sign db '-'             ; for printing minus sign
+space db "  "               ; for printing space in output
+newline db " ", 0xa         ; to print a new blank line
+newl_len    equ $ - newline
+
+;=====================================================================================;
+section .text
+global _start               ;must be declared for using gcc
+_start:                     ;tell linker entry point
+
+        display msg1,len1            
+        accept num,1                 ;input total no of elements
+        display num,1                ; display total no of elements
+        mov al, byte[num]            ; convert num to equiv ascii
+        sub al,'0'
+        mov byte[num],al
+   
+        display newline,newl_len
+        display msg2,len2           ; give the prompt to enter elements
+        display newline,newl_len
+   
+;------------------------------------------------------------------------------------;    
+acc:
+          accept temp,1           ; accept 1 char from input
+          cmp byte[temp],30h      ; for checking pos or neg
+          jg positive             ; if number is positive
+          jz zero                 ;if number is 0
+
+          call _negative       ; call procedure for negative nos
+          jmp take_next    
+         
+positive: call _positive       ; call procedure for positive nos
+          jmp take_next
+         
+ ;if number is 0, just display it and accept next no          
+zero:     display temp,1    
+
+take_next:
+          dec byte[num]                    ; decrement num
+          jnz acc                          ; if not 0, accept another no
+          call _print_arrays               ; if 0, jump to print_arrays
+          jmp myend      
+     
+;--------------------------------------------------------------------------------------;  
+
+_negative:                        ;procedure for negative number
+        accept temp,1             ; for negative num, accept another char
+        display neg_sign,1        ; print neg sign
+        display temp,1            ; print the num
+        mov esi, negatives        ; make esi point on negatives array
+        cmp dword[temp_addr_n], '0' ; check if temp addr is 0
+        je ahead1                   ; if yes, go to ahead1
+       
+        ; else move the temp addr into esi
+        mov esi, dword[temp_addr_n]
+       
+ahead1: mov al, byte[temp]          ; move inputted num to al
+        mov [esi], al               ; move content of al to addr pointed by esi
+        display newline, newl_len
+        inc esi                     ; make esi point on next array location
+       
+        ; store updated val of esi in temp addr
+        mov dword[temp_addr_n], esi
+        inc byte[neg_cntr]        ; increment negative counter
+        ret                       ; skip the code for positive num
+
+;---------------------------------------------------------------------------------------;
+
+_positive:                           ;procedure for positive number
+       
+        display temp,1              ; print the current inputted num
+        mov esi, positives          ; make esi point on positives array
+        cmp dword[temp_addr_p], '0' ; check if temp addr is 0
+        je ahead2                   ; if yes, jump to ahead2
+       
+         ; else move the temp addr into esi
+        mov esi, dword[temp_addr_p]
+       
+ahead2: mov al, byte[temp]      ; move inputted num to al
+        mov [esi], al           ; move content of al to addr pointed by esi
+        display newline, newl_len
+        inc esi                 ; make esi point on next array location
+       
+        ; store updated val of esi in temp addr
+        mov dword[temp_addr_p], esi
+        inc byte[pos_cntr]            ; increment positive counter
+        ret
+
+;--------------------------------------------------------------------------------------;
+
+_print_arrays:                          ; procedure to print both arrays
+    display newline, newl_len
+    display newline, newl_len
+    display pos_msg,pos_msg_len
+    add byte[pos_cntr], 30h             ; to convert to equiv ascii
+    display pos_cntr,1                  ; display count of positives
+    display newline, newl_len
+    mov esi, positives                  ; make esi point on positives array
+   
+again1:
+    ; move content in location pointed by esi into al
+    mov al,byte[esi]        
+    mov byte[print_temp],al  ; store al content in print_temp
+    display print_temp,1     ; display the number
+    display space,1          ; display space
+    inc esi                  ; move esi to the next array location
+    dec byte[pos_cntr]       ; decrement count of positives
+    cmp byte[pos_cntr], '0'  ; check if all positives are printed
+    jg again1                ; if no, go back to label again1
+   
+    display newline, newl_len
+    display neg_msg,neg_msg_len
+    add byte[neg_cntr], 30h             ; to convert to equiv character
+    display neg_cntr,1                  ; display count of negatives
+    display newline, newl_len
+    mov esi, negatives        ; make esi point on negatives array
+   
+again2:
+    ; move content in location pointed by esi into al
+    mov al,byte[esi]                
+    mov byte[print_temp],al         ; store al content in print_temp
+    display neg_sign,1              ; display minus sign
+    display print_temp,1            ; display the number
+    display space,1                 ; display space
+    inc esi                     ; move esi to the next array location
+    dec byte[neg_cntr]          ; decrement count of negatives
+    cmp byte[neg_cntr], '0'     ; check if all negatives are printed
+    jg again2                   ; if no, go back to label again2
+    ret
+
+;----------------------------------------------------------------------------------------;
+
+myend:                              ; end the program
+    mov eax,1
+    mov ebx,0                       ;exit call
+    int 80h                         ;call kernel
+
+;==========================================================================================;
